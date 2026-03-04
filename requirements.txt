@@ -1,0 +1,5 @@
+streamlit>=1.28.0
+python-dotenv>=1.0.0
+
+# 可选：OpenAI API 集成
+# openai>=1.0.0

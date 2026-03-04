@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Git
+.git/
+
+# 目录
+skills/
+memory/
+.openclaw/
+output/
+
+# 临时文件
+*.md.bak
+*.py.bak
