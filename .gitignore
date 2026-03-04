@@ -14,12 +14,21 @@ ENV/
 # Git
 .git/
 
-# 目录
-skills/
-memory/
+# OpenClaw（忽略系统文件）
 .openclaw/
-output/
+AGENTS.md
+HEARTBEAT.md
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER.md
+
+# 技能目录（本地复制的，不需要提交）
+skills/
 
 # 临时文件
 *.md.bak
 *.py.bak
+
+# 中文文件
+*.md.bak
