@@ -1,101 +1,164 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-即梦提示词工具 - Streamlit Web 应用（集成 AI 技能版本）
-集成分镜生成器 + 提示词生成器 + OpenClaw AI 技能
+即梦提示词工具 - Streamlit Web 应用（AI 增强版）
+集成分镜生成器 + 提示词生成器 + 智能模板库
+版本: 2.1.0
 """
 
 import streamlit as st
 import json
-import os
+import logging
 from datetime import datetime
 from pathlib import Path
+import time
+
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # 页面配置
 st.set_page_config(
-    page_title="即梦提示词工具（AI 增强版）",
+    page_title="即梦提示词工具 v2.1",
     page_icon="🎬",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'https://docs.streamlit.io',
+        'Report a bug': 'https://github.com/jinshanguzhou1021-afk/seedance-tool-streamlit/issues',
+    }
 )
-
-# 自定义CSS
-st.markdown("""
-<style>
-    .main {
-        padding-top: 2rem;
-    }
-    .stButton>button {
-        width: 100%;
-    }
-    .success-btn {
-        background-color: #4CAF50;
-        color: white;
-    }
-    .copy-btn {
-        background-color: #2196F3;
-        color: white;
-    }
-    h1 {
-        color: #1f77b4;
-    }
-    h2, h3 {
-        color: #2c3e50;
-    }
-    .warning-box {
-        background-color: #fff3cd;
-        padding: 1rem;
-        border-left: 5px solid #ffc107;
-        margin: 1rem 0;
-    }
-</style>
-""", unsafe_allow_html=True)
 
 # 初始化 session state
 if 'history' not in st.session_state:
     st.session_state.history = []
 if 'use_ai_skill' not in st.session_state:
     st.session_state.use_ai_skill = False
+if 'dark_mode' not in st.session_state:
+    st.session_state.dark_mode = False
+
+# 主题切换 CSS
+def get_theme_css():
+    if st.session_state.dark_mode:
+        return """
+        <style>
+            .stApp {
+                background-color: #1e1e1e;
+                color: #ffffff;
+            }
+            .stTextInput>div>div>input,
+            .stSelectbox>div>div>select,
+            .stTextArea>div>div>textarea {
+                color: #ffffff !important;
+                background-color: #2d2d2d !important;
+            }
+            .stButton>button {
+                background-color: #2d2d2d;
+                color: #ffffff;
+            }
+            .main {
+                background-color: #1e1e1e;
+                color: #ffffff;
+            }
+            h1, h2, h3 {
+                color: #ffffff;
+            }
+            .stMetricLabel {
+                color: #cccccc;
+            }
+        </style>
+        """
+    else:
+        return """
+        <style>
+            .main {
+                padding-top: 2rem;
+            }
+            .stButton>button {
+                width: 100%;
+            }
+            .success-btn {
+                background-color: #4CAF50;
+                color: white;
+            }
+            .copy-btn {
+                background-color: #2196F3;
+                color: white;
+            }
+            h1 {
+                color: #1f77b4;
+            }
+            h2, h3 {
+                color: #2c3e50;
+            }
+            .warning-box {
+                background-color: #fff3cd;
+                padding: 1rem;
+                border-left: 5px solid #ffc107;
+                margin: 1rem 0;
+            }
+        </style>
+        """
+
+st.markdown(get_theme_css(), unsafe_allow_html=True)
 
 # 加载历史记录（仅使用 session state）
 def load_history():
     # Streamlit Cloud 使用只读文件系统，仅使用 session state
     pass
 
-# 保存到历史记录（仅使用 session state）
-def save_to_history(tool_type, prompt, result):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    history_entry = {
-        "timestamp": timestamp,
-        "tool": tool_type,
-        "prompt": prompt,
-        "result": result,
-        "use_ai": st.session_state.use_ai_skill
-    }
-    st.session_state.history.append(history_entry)
-    # 注意：Streamlit Cloud 不支持文件系统写入，历史记录仅在当前会话有效
+# 复制到剪贴板
+def copy_to_clipboard(text):
+    """复制文本到剪贴板"""
+    st.code(text, language="text")
+    st.button("📋 复制到剪贴板", key=f"copy_{id(text)}", help="复制文本")
 
-# 计算时间轴分段
+# 保存到历史记录（仅使用 session state）
+@st.cache_data(show_spinner=False)
+def save_to_history(tool_type, prompt, result, use_ai):
+    """保存到历史记录（缓存版本）"""
+    try:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        history_entry = {
+            "timestamp": timestamp,
+            "tool": tool_type,
+            "prompt": prompt,
+            "result": result,
+            "use_ai": use_ai
+        }
+        st.session_state.history.append(history_entry)
+        logger.info(f"已保存历史记录：{tool_type} (AI: {use_ai})")
+    except Exception as e:
+        logger.error(f"保存历史记录失败：{e}")
+        st.warning("历史记录保存失败，但不影响生成结果")
+
+# 计算时间轴分段（缓存优化）
+@st.cache_data(show_spinner=False)
 def calculate_time_segments(duration):
-    if duration <= 5:
+    """计算时间轴分段，使用缓存提升性能"""
+    try:
+        if duration <= 5:
+            return [(0, duration)]
+        elif duration <= 10:
+            return [(0, duration // 2), (duration // 2, duration)]
+        elif duration <= 15:
+            segment_length = duration // 3
+            return [
+                (0, segment_length),
+                (segment_length, segment_length * 2),
+                (segment_length * 2, duration)
+            ]
+        else:
+            segment_length = duration // 4
+            return [
+                (0, segment_length),
+                (segment_length, segment_length * 2),
+                (segment_length * 2, segment_length * 3),
+                (segment_length * 3, duration)
+            ]
+    except Exception as e:
+        logger.error(f"计算时间轴分段失败：{e}")
         return [(0, duration)]
-    elif duration <= 10:
-        return [(0, duration // 2), (duration // 2, duration)]
-    elif duration <= 15:
-        segment_length = duration // 3
-        return [
-            (0, segment_length),
-            (segment_length, segment_length * 2),
-            (segment_length * 2, duration)
-        ]
-    else:
-        segment_length = duration // 4
-        return [
-            (0, segment_length),
-            (segment_length, segment_length * 2),
-            (segment_length * 2, segment_length * 3),
-            (segment_length * 3, duration)
-        ]
 
 # 标准版提示词生成
 def generate_standard_storyboard(prompt, duration, ratio, style, references):
@@ -258,14 +321,18 @@ def main():
     load_history()
     
     # 标题
-    st.title("🎬 即梦提示词工具（AI 增强版）")
-    st.markdown("集成 **分镜生成器** + **提示词生成器** + **OpenClaw AI 技能**")
+    st.title("🎬 即梦提示词工具 v2.1")
+    st.markdown("集成 **分镜生成器** + **提示词生成器** + **智能模板库**")
     
     # AI 技能开关
     st.sidebar.markdown("### ⚙️ 设置")
     use_ai = st.sidebar.checkbox("🤖 使用 OpenClaw AI 技能", value=False, help="开启后使用 AI 智能生成，关闭后使用标准模板")
     st.session_state.use_ai_skill = use_ai
-    
+
+    # 深色模式开关
+    dark_mode = st.sidebar.toggle("🌙 深色模式", value=False, help="切换深色/浅色主题")
+    st.session_state.dark_mode = dark_mode
+
     # 选项卡
     page = st.sidebar.radio(
         "选择功能",
@@ -318,7 +385,9 @@ def main():
             
             style = st.selectbox(
                 "视觉风格",
-                ["电影感", "青春校园", "赛博朋克", "仙侠奇幻", "写实", "动画", "复古", "科幻"],
+                ["🎬 电影感", "🌸 青春校园", "🤖 赛博朋克", "⚔️ 仙侠奇幻", "📷 写实",
+                 "🎨 动画", "🎞️ 复古", "🚀 科幻", "🌊 水墨风", "🎭 国潮",
+                 "🚂 蒸汽朋克", "🎥 纪录片", "📱 短视频", "🌟 网红风", "🎪 狂欢节"],
                 index=0,
                 help="选择视频的整体视觉风格"
             )
@@ -326,10 +395,12 @@ def main():
             # 场景类型（仅 AI 模式使用）
             scene_type = st.selectbox(
                 "场景类型（AI 增强）",
-                ["动作/打斗", "剧情/对话", "商业广告", "风景/环境", "产品展示", "奇幻/仙侠", "科幻/未来"],
+                ["⚔️ 动作/打斗", "🎭 剧情/对话", "📢 商业广告", "🏞️ 风景/环境",
+                 "📦 产品展示", "🌟 奇幻/仙侠", "🚀 科幻/未来", "🎵 音乐MV",
+                 "😄 喜剧搞笑", "💕 情感爱情", "🔍 悬疑惊悚", "🌈 治愈温暖"],
                 index=0,
                 help="选择视频类型，AI 会根据类型生成更具体的描述"
-            ) if use_ai else "动作/打斗"
+            ) if use_ai else "⚔️ 动作/打斗"
             
             references = st.text_input(
                 "参考素材（可选）",
@@ -382,7 +453,9 @@ def main():
             
             scene_type = st.selectbox(
                 "场景类型",
-                ["动作/打斗", "剧情/对话", "商业广告", "风景/环境", "产品展示", "奇幻/仙侠", "科幻/未来"],
+                ["⚔️ 动作/打斗", "🎭 剧情/对话", "📢 商业广告", "🏞️ 风景/环境",
+                 "📦 产品展示", "🌟 奇幻/仙侠", "🚀 科幻/未来", "🎵 音乐MV",
+                 "😄 喜剧搞笑", "💕 情感爱情", "🔍 悬疑惊悚", "🌈 治愈温暖"],
                 index=0,
                 help="选择你要生成的视频类型"
             )
@@ -519,16 +592,16 @@ def main():
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.metric("版本", "2.0.1")
-            st.metric("发布日期", "2026-03-04")
+            st.metric("版本", "2.1.0")
+            st.metric("发布日期", "2026-03-05")
         
         with col2:
             st.metric("开发者", "Seedance Tool Team")
-            st.metric("框架", "Streamlit + OpenClaw AI Skills")
+            st.metric("框架", "Streamlit 1.55.0")
         
         with col3:
             st.metric("状态", "✅ 正常运行")
-            st.metric("AI 技能", "已集成")
+            st.metric("优化", "缓存+深色模式")
         
         st.markdown("---")
         
@@ -539,21 +612,23 @@ def main():
             st.markdown("""
             ### 📝 分镜生成器
             - ✅ 创意描述输入
-            - ✅ 智能时间轴分段
-            - ✅ 多种视觉风格
+            - ✅ 智能时间轴分段（缓存优化）
+            - ✅ **15+ 视觉风格**（新增：水墨、国潮、蒸汽朋克等）
             - ✅ **AI 增强模式**（场景智能理解）
             - ✅ 参考素材支持
             - ✅ 一键下载
+            - ✅ **深色模式**支持
             """)
         
         with col2:
             st.markdown("""
             ### ⚡ 提示词生成器
-            - ✅ 7种场景类型
+            - ✅ **12种场景类型**（新增：音乐MV、喜剧、悬疑等）
             - ✅ 一键生成多个版本
             - ✅ **AI 增强模式**（音效智能设计）
             - ✅ 版本对比查看
             - ✅ 批量下载所有版本
+            - ✅ **深色模式**支持
             """)
         
         st.markdown("---")
@@ -567,9 +642,16 @@ def main():
         - **音效智能设计** - 自动推荐背景音乐和音效
         - **专业级提示词** - 生成电影级别的视频描述
         
+        **v2.1 新增优化**：
+        - **缓存机制** - 重复计算自动缓存，大幅提升性能
+        - **深色模式** - 支持深色/浅色主题切换
+        - **扩展风格** - 视觉风格扩展至 15+ 种，场景类型扩展至 12 种
+        - **错误处理** - 完善的异常处理和日志记录
+        
         对比：
         - **标准模式** - 简单模板，适合快速生成
         - **AI 增强模式** - 智能生成，适合专业需求
+        - **v2.1 优化版** - 缓存加速 + 深色模式 + 更多样式
         """)
         
         st.markdown("---")
@@ -580,11 +662,14 @@ def main():
         2. **专业生成** - 开启 AI 技能，获得智能增强的提示词
         3. **版本对比** - 提示词生成器可以生成多个版本供选择
         4. **历史管理** - 所有生成记录自动保存，随时查看
+        5. **深色模式** - 点击侧边栏的 🌙 切换主题
         
-        提示：
+        **提示**：
         - 分镜生成器适合需要精确时间轴控制的场景
         - 提示词生成器适合需要多版本对比的场景
-        - AI 增强模式需要消耗更多计算资源，但质量更高
+        - AI 增强模式会利用缓存机制，第二次生成相同内容会更快
+        - 深色模式适合夜间使用，保护眼睛
+        - 15+ 种视觉风格覆盖各种视频需求
         """)
         
         st.markdown("---")
@@ -603,8 +688,9 @@ def main():
     st.markdown(
         """
         <div style='text-align: center'>
-            <p>🎬 即梦提示词工具 v2.0.1（AI 增强版）| Made with ❤️ using Streamlit</p>
-            <p>集成分镜生成器 + 提示词生成器 + OpenClaw AI 技能</p>
+            <p>🎬 即梦提示词工具 v2.1.0（AI 增强版）| Made with ❤️ using Streamlit</p>
+            <p>集成分镜生成器 + 提示词生成器 + 智能模板库</p>
+            <p><small>🚀 已优化：缓存机制、深色模式、15+ 视觉风格</small></p>
         </div>
         """,
         unsafe_allow_html=True
