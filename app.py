@@ -54,21 +54,15 @@ st.markdown("""
 # 初始化 session state
 if 'history' not in st.session_state:
     st.session_state.history = []
-    st.session_state.history_file = Path.home() / ".seedance_streamlit_history.json"
 if 'use_ai_skill' not in st.session_state:
     st.session_state.use_ai_skill = False
 
-# 加载历史记录
+# 加载历史记录（仅使用 session state）
 def load_history():
-    if st.session_state.history_file.exists():
-        try:
-            with open(st.session_state.history_file, 'r', encoding='utf-8') as f:
-                st.session_state.history = json.load(f)
-        except Exception as e:
-            print(f"加载历史记录失败：{e}")
-            st.session_state.history = []
+    # Streamlit Cloud 使用只读文件系统，仅使用 session state
+    pass
 
-# 保存到历史记录
+# 保存到历史记录（仅使用 session state）
 def save_to_history(tool_type, prompt, result):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     history_entry = {
@@ -79,13 +73,7 @@ def save_to_history(tool_type, prompt, result):
         "use_ai": st.session_state.use_ai_skill
     }
     st.session_state.history.append(history_entry)
-
-    # 保存到文件
-    try:
-        with open(st.session_state.history_file, 'w', encoding='utf-8') as f:
-            json.dump(st.session_state.history, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        st.error(f"保存历史记录失败：{e}")
+    # 注意：Streamlit Cloud 不支持文件系统写入，历史记录仅在当前会话有效
 
 # 计算时间轴分段
 def calculate_time_segments(duration):
@@ -512,8 +500,6 @@ def main():
             if st.button("🗑️ 清除所有历史记录"):
                 if st.session_state.get('confirm_clear', False):
                     st.session_state.history = []
-                    if st.session_state.history_file.exists():
-                        st.session_state.history_file.unlink()
                     st.success("✅ 历史记录已清除！")
                     st.session_state.confirm_clear = False
                     st.rerun()
@@ -521,6 +507,9 @@ def main():
                     st.warning("⚠️ 确认要清除所有历史记录吗？")
                     st.session_state.confirm_clear = True
                     st.rerun()
+
+            # Streamlit Cloud 提示
+            st.info("💡 提示：在 Streamlit Cloud 上，历史记录仅在当前会话有效，刷新页面后会清空。")
     
     # 功能 4：关于
     elif page == "ℹ️ 关于":
