@@ -114,9 +114,8 @@ def copy_to_clipboard(text):
     st.button("📋 复制到剪贴板", key=f"copy_{id(text)}", help="复制文本")
 
 # 保存到历史记录（仅使用 session state）
-@st.cache_data(show_spinner=False)
 def save_to_history(tool_type, prompt, result, use_ai):
-    """保存到历史记录（缓存版本）"""
+    """保存到历史记录（不使用缓存，因为修改会话状态）"""
     try:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         history_entry = {
@@ -426,9 +425,9 @@ def main():
                         # 显示结果
                         st.success("✅ 分镜生成完成！（{} AI 增强）".format("使用" if use_ai else "标准"))
                         st.code(result, language="text")
-                        
+
                         # 保存到历史
-                        save_to_history("分镜生成", prompt, result)
+                        save_to_history("分镜生成", prompt, result, use_ai)
                         
                         # 下载按钮
                         st.download_button(
@@ -534,9 +533,9 @@ def main():
                             mime="text/plain",
                             use_container_width=True
                         )
-                        
+
                         # 保存到历史
-                        save_to_history("提示词生成", description, final_result)
+                        save_to_history("提示词生成", description, final_result, use_ai)
             else:
                 st.info("👆 在左侧输入参数并生成")
     
