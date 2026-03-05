@@ -161,28 +161,34 @@ def calculate_time_segments(duration):
 
 # 标准版提示词生成
 def generate_standard_storyboard(prompt, duration, ratio, style, references):
+    # 智能解析用户输入
+    parsed_prompt = smart_parse_input("🎭 剧情/对话", prompt)
+
     segments = calculate_time_segments(duration)
-    
+
     result = f"{duration}秒{style}视频，{ratio}。\n\n时间轴：\n"
-    
+
     for i, (start, end) in enumerate(segments):
         if i == 0:
-            desc = f"{start}-{end}秒：{prompt}的引入，镜头缓慢推近，建立场景"
+            desc = f"{start}-{end}秒：{parsed_prompt}的引入，镜头缓慢推近，建立场景"
         elif i == len(segments) - 1:
-            desc = f"{start}-{end}秒：{prompt}的高潮部分，{style}风格，拉远定格"
+            desc = f"{start}-{end}秒：{parsed_prompt}的高潮部分，{style}风格，拉远定格"
         else:
-            desc = f"{start}-{end}秒：{prompt}的发展，{style}风格，环绕拍摄"
+            desc = f"{start}-{end}秒：{parsed_prompt}的发展，{style}风格，环绕拍摄"
         result += f"- {desc}\n"
-    
+
     if references != "无":
         result += f"\n参考素材：\n- {references}\n"
-    
+
     return result
 
 # AI 增强版提示词生成（模拟 OpenClaw 技能）
 def generate_ai_storyboard(prompt, duration, ratio, style, scene_type, references):
     """模拟 OpenClaw 技能的智能生成"""
-    
+
+    # 智能解析用户输入（仅在fallback时使用）
+    parsed_prompt = smart_parse_input(scene_type, prompt)
+
     segments = calculate_time_segments(duration)
     
     # 根据场景类型生成更具体的描述
@@ -226,9 +232,9 @@ def generate_ai_storyboard(prompt, duration, ratio, style, scene_type, reference
     
     # 获取对应场景的描述
     descriptions = scene_descriptions.get(scene_type, [
-        f"{prompt}的引入，建立场景",
-        f"{prompt}的发展，{style}风格",
-        f"{prompt}的高潮，拉远定格"
+        f"{parsed_prompt}的引入，建立场景",
+        f"{parsed_prompt}的发展，{style}风格",
+        f"{parsed_prompt}的高潮，拉远定格"
     ])
     
     result = f"{duration}秒{scene_type}场景，{style}风格，{ratio}。\n\n时间轴（AI 增强）：\n"
@@ -279,10 +285,136 @@ def get_sound_effects(scene_type):
     }
     return sound_effects.get(scene_type, "环境音、动作音效")
 
+# 智能解析用户输入
+def smart_parse_input(scene_type, user_input):
+    """智能解析用户输入，区分指令和场景描述"""
+
+    # 检查是否为空输入
+    if not user_input or user_input.strip() == "":
+        return generate_default_scene(scene_type)
+
+    # 检查是否为指令（如"帮我生成"、"请生成"等）
+    instruction_patterns = [
+        "帮我生成", "请生成", "生成", "制作", "创建",
+        "我想看", "我想做", "我要", "需要",
+        "分镜", "提示词"
+    ]
+
+    input_lower = user_input.lower().strip()
+
+    # 如果输入包含指令关键词，认为是请求而非场景描述
+    if any(pattern in input_lower for pattern in instruction_patterns):
+        # 尝试提取关键词（如"情侣"）
+        keywords = extract_keywords(user_input, scene_type)
+        if keywords:
+            return generate_scene_from_keywords(scene_type, keywords)
+        else:
+            return generate_default_scene(scene_type)
+
+    # 如果输入很短（<5个字），可能是用户还没输入完整
+    if len(user_input) < 5:
+        return generate_default_scene(scene_type)
+
+    # 正常的场景描述，直接返回
+    return user_input.strip()
+
+# 提取关键词
+def extract_keywords(user_input, scene_type):
+    """从用户输入中提取关键词"""
+
+    # 常见关键词映射
+    keyword_patterns = {
+        "情侣": ["情侣", "恋人", "男女", "两人", "一对"],
+        "动作": ["打斗", "战斗", "武打", "动作", "格斗"],
+        "风景": ["风景", "景色", "山水", "自然", "风景"],
+        "产品": ["产品", "商品", "展示", "广告", "推广"],
+        "喜剧": ["喜剧", "搞笑", "幽默", "有趣", "好玩"],
+        "音乐": ["音乐", "歌曲", "MV", "演唱", "歌舞"],
+        "悬疑": ["悬疑", "惊悚", "恐怖", "神秘", "紧张"],
+        "治愈": ["治愈", "温暖", "温馨", "感人", "正能量"]
+    }
+
+    # 场景类型对应的主题关键词
+    scene_keywords = {
+        "⚔️ 动作/打斗": ["打斗", "战斗", "武术", "格斗", "对决"],
+        "🎭 剧情/对话": ["情侣", "恋人", "两人", "对话", "交谈"],
+        "📢 商业广告": ["产品", "商品", "品牌", "推广", "展示"],
+        "🏞️ 风景/环境": ["风景", "景色", "自然", "山水", "美景"],
+        "📦 产品展示": ["产品", "商品", "展示", "介绍", "演示"],
+        "🌟 奇幻/仙侠": ["仙侠", "奇幻", "魔法", "修炼", "江湖"],
+        "🚀 科幻/未来": ["科幻", "未来", "科技", "宇宙", "飞船"],
+        "🎵 音乐MV": ["音乐", "歌曲", "MV", "演唱", "舞蹈"],
+        "😄 喜剧搞笑": ["喜剧", "搞笑", "幽默", "有趣", "好笑"],
+        "💕 情感爱情": ["情侣", "恋人", "爱情", "浪漫", "表白"],
+        "🔍 悬疑惊悚": ["悬疑", "惊悚", "恐怖", "神秘", "紧张"],
+        "🌈 治愈温暖": ["治愈", "温暖", "温馨", "感人", "正能量"]
+    }
+
+    # 优先查找场景类型相关的关键词
+    if scene_type in scene_keywords:
+        for keyword in scene_keywords[scene_type]:
+            if keyword in user_input:
+                return keyword
+
+    # 查找通用关键词
+    for category, patterns in keyword_patterns.items():
+        for pattern in patterns:
+            if pattern in user_input:
+                return category
+
+    return None
+
+# 根据关键词生成场景
+def generate_scene_from_keywords(scene_type, keywords):
+    """根据关键词生成合适的场景描述"""
+
+    scene_templates = {
+        "情侣": "一对情侣在夕阳下对视，准备表白",
+        "动作": "主角在废墟中与敌人展开激烈战斗",
+        "风景": "无人机俯拍壮丽的山川湖海，云雾缭绕",
+        "产品": "360度旋转展示产品细节，光影突出质感",
+        "喜剧": "主角滑稽地摔倒，周围人忍不住大笑",
+        "音乐": "歌手在舞台上深情演唱，灯光绚丽",
+        "悬疑": "主角在黑暗中探索，突然发现神秘线索",
+        "治愈": "温暖阳光洒在小女孩脸上，她开心地笑着"
+    }
+
+    # 查找匹配的模板
+    for key, template in scene_templates.items():
+        if key in keywords or keywords in key:
+            return template
+
+    # 如果没有匹配，返回场景类型相关的默认场景
+    return generate_default_scene(scene_type)
+
+# 生成默认场景
+def generate_default_scene(scene_type):
+    """根据场景类型生成默认场景描述"""
+
+    default_scenes = {
+        "⚔️ 动作/打斗": "武侠高手在竹林中与敌人激烈对战，剑气纵横",
+        "🎭 剧情/对话": "一对情侣在咖啡馆里温馨交谈，氛围浪漫",
+        "📢 商业广告": "产品特写镜头，展示细节和质感，高端大气",
+        "🏞️ 风景/环境": "无人机航拍壮丽的自然风光，云海、雪山、森林",
+        "📦 产品展示": "360度旋转展示产品，展示多个角度和使用场景",
+        "🌟 奇幻/仙侠": "修仙者在云端飞舞，身后仙气缭绕，宛如仙境",
+        "🚀 科幻/未来": "宇航员在宇宙空间站探索，窗外是绚丽的星云",
+        "🎵 音乐MV": "歌手在舞台上深情演唱，灯光绚丽，观众欢呼",
+        "😄 喜剧搞笑": "主角滑稽地绊倒，周围朋友忍不住大笑",
+        "💕 情感爱情": "一对情侣在夕阳下对视，准备表白，氛围浪漫",
+        "🔍 悬疑惊悚": "主角在废弃工厂中探索，突然发现神秘线索",
+        "🌈 治愈温暖": "温暖阳光洒在脸上，小女孩开心地笑着，温馨治愈"
+    }
+
+    return default_scenes.get(scene_type, "美丽的自然风光，宁静祥和")
+
 # 标准版提示词生成
 def generate_standard_prompt(scene_type, description, duration, ratio, version, references):
+    # 智能解析用户输入
+    parsed_description = smart_parse_input(scene_type, description)
+
     segments = calculate_time_segments(duration)
-    
+
     version_styles = {
         1: "标准版",
         2: "更具创意",
@@ -291,27 +423,27 @@ def generate_standard_prompt(scene_type, description, duration, ratio, version, 
         5: "电影质感"
     }
     style_desc = version_styles.get(version, "标准版")
-    
+
     result = f"--- 版本 {version}（{style_desc}）---\n"
     result += f"{duration}秒{scene_type}场景，{style_desc}风格，{ratio}。\n\n时间轴：\n"
-    
+
     for j, (start, end) in enumerate(segments):
         if j == 0:
-            desc = f"{start}-{end}秒：{description}的引入，特写"
+            desc = f"{start}-{end}秒：{parsed_description}的引入，特写"
         elif j == len(segments) - 1:
-            desc = f"{start}-{end}秒：{description}的高潮，拉远定格"
+            desc = f"{start}-{end}秒：{parsed_description}的高潮，拉远定格"
         else:
-            desc = f"{start}-{end}秒：{description}的发展，中景跟随"
+            desc = f"{start}-{end}秒：{parsed_description}的发展，中景跟随"
         result += f"- {desc}\n"
-    
+
     # 添加音效设计
     result += "\n音效设计：\n"
     result += f"- 背景音乐：{get_music_style(scene_type)}\n"
     result += f"- 音效：{get_sound_effects(scene_type)}\n"
-    
+
     if references != "无":
         result += f"\n参考素材：\n- {references}\n"
-    
+
     return result
 
 # 主界面
@@ -359,9 +491,9 @@ def main():
             
             prompt = st.text_area(
                 "创意描述",
-                placeholder="例如：仙侠战斗，主角持剑迎战魔兵",
+                placeholder="例如：一对情侣在夕阳下对视，准备表白",
                 height=150,
-                help="描述你想创建的视频内容"
+                help="描述你想创建的视频内容。如果是简单的需求（如'情侣对话'），系统会自动生成合适的场景描述。"
             )
             
             st.markdown("### ⚙️ 参数设置")
@@ -461,9 +593,9 @@ def main():
             
             description = st.text_area(
                 "场景描述",
-                placeholder="例如：男女主角在夕阳下对视，准备表白",
+                placeholder="例如：一对情侣在夕阳下对视，准备表白",
                 height=120,
-                help="详细描述视频内容"
+                help="详细描述视频内容。如果是简单的需求（如'情侣对话'），系统会自动生成合适的场景描述。"
             )
             
             st.markdown("### ⚙️ 参数设置")
