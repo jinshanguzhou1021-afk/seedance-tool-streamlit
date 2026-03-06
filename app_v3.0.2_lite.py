@@ -34,7 +34,7 @@ except (KeyError, FileNotFoundError):
         API_MODE = "环境变量"
     else:
         # 方式 3：内置 fallback（仅用于本地开发测试）
-        API_KEY = "sk-62a693ae5cb24574bd9df2a9bb53cd99"
+        API_KEY = "sk-0e3867301f604aef8afd25c0ed35aa98"
         API_MODE = "内置 fallback"
         st.sidebar.warning("⚠️ 正在使用硬编码的 API Key，请尽快迁移到 st.secrets")
 
