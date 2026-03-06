@@ -527,100 +527,65 @@ def calculate_time_segments(duration):
         logger.error(f"计算时间轴分段失败：{e}")
         return [(0, duration)]
 
-# 标准版提示词生成
-def generate_standard_storyboard(prompt, duration, ratio, style, references):
-    # 智能解析用户输入
-    parsed_prompt = smart_parse_input("🎭 剧情/对话", prompt)
+# ================= AI 增强版提示词生成（DeepSeek API 集成）===================
 
-    segments = calculate_time_segments(duration)
-
-    result = f"{duration}秒{style}视频，{ratio}。\n\n时间轴：\n"
-
-    for i, (start, end) in enumerate(segments):
-        if i == 0:
-            desc = f"{start}-{end}秒：{parsed_prompt}的引入，镜头缓慢推近，建立场景"
-        elif i == len(segments) - 1:
-            desc = f"{start}-{end}秒：{parsed_prompt}的高潮部分，{style}风格，拉远定格"
-        else:
-            desc = f"{start}-{end}秒：{parsed_prompt}的发展，{style}风格，环绕拍摄"
-        result += f"- {desc}\n"
-
-    if references != "无":
-        result += f"\n参考素材：\n- {references}\n"
-
-    return result
-
-# AI 增强版提示词生成（模拟 OpenClaw 技能）
 def generate_ai_storyboard(prompt, duration, ratio, style, scene_type, references):
-    """模拟 OpenClaw 技能的智能生成"""
+    """
+    真正的 AI 增强分镜：调用 DeepSeek，把枯燥的对话转化为带有光影、物理动作的顶级视频提示词
+    """
+    # 让 AI 知道该怎么把"文字"变成"画面"
+    system_instruction = f"""
+你是一位顶尖的 AI 视频提示词专家（精通 Seedance, Runway, Kling）。
+用户的输入可能是一段剧情、一段简单的对话，或者一个简单的点子。
+你现在的任务是：将这段内容【视觉化】，转化为具体的画面描述。
 
-    # 智能解析用户输入（仅在fallback时使用）
-    parsed_prompt = smart_parse_input(scene_type, prompt)
+【核心规则 - 必看】
+1. 绝对不要直接复制用户的原话！不要写"某某剧情的引入"、"的高潮"这种废话！
+2. 如果用户输入的是"角色对话"，请将其描绘成"人物的面部表情、肢体动作、眼神交流"以及"光影变幻"。
+3. 必须包含具体的专业运镜术语（如：特写、慢推、环绕、平移）。
+4. 音效必须具体，不要写"根据场景调整"。
 
-    segments = calculate_time_segments(duration)
-    
-    # 根据场景类型生成更具体的描述
-    scene_descriptions = {
-        "动作/打斗": [
-            "低角度特写主角，衣袍被风/能量吹动，握紧武器，眼神凝视前方",
-            "环绕拍摄主角出招，武器发光/能量爆发，特效冲击，敌人被击飞",
-            "慢放定格终极一击，冲击波横扫，主角屹立不倒，背景燃烧"
-        ],
-        "剧情/对话": [
-            "远景展示环境，主角或主要角色登场，建立场景氛围",
-            "中景展示对话或互动，面部表情特写，肢体语言展现",
-            "近景或特写关键瞬间，情感高潮，拉远定格或淡出"
-        ],
-        "商业广告": [
-            "产品展示镜头，360度旋转或特写细节，光影突出质感",
-            "功能演示，产品应用场景，使用效果对比",
-            "品牌LOGO和slogan定格，高端质感，营销氛围"
-        ],
-        "奇幻/仙侠": [
-            "俯拍云海或仙境全景，镜头缓缓下推，营造神秘氛围",
-            "主角登场，特写或中景，特效光环，背景音乐响起",
-            "慢放定格主角持剑/施法，画面震撼，音效高潮"
-        ],
-        "科幻/未来": [
-            "俯拍未来城市或宇宙全景，霓虹灯光，赛博朋克氛围",
-            "主角或装备特写，科技感，机械结构，全息投影",
-            "慢放定格能量爆发或穿越，震撼特效，史诗感"
-        ],
-        "风景/环境": [
-            "大远景展示自然环境，云层、山峰、海洋等",
-            "镜头移动（推/拉/摇），展现细节变化，光影流转",
-            "拉远或定点，风景全景或特写细节，意境悠远"
-        ],
-        "产品展示": [
-            "产品360度旋转展示，全角度展示细节",
-            "分解展示，产品拆分展示内部结构或材质",
-            "合成定格，产品完整展示，背景简洁或高级"
-        ]
-    }
-    
-    # 获取对应场景的描述
-    descriptions = scene_descriptions.get(scene_type, [
-        f"{parsed_prompt}的引入，建立场景",
-        f"{parsed_prompt}的发展，{style}风格",
-        f"{parsed_prompt}的高潮，拉远定格"
-    ])
-    
-    result = f"{duration}秒{scene_type}场景，{style}风格，{ratio}。\n\n时间轴（AI 增强）：\n"
-    
-    for i, (start, end) in enumerate(segments):
-        desc = descriptions[i] if i < len(descriptions) else f"{start}-{end}秒：结尾"
-        camera_movement = get_camera_movement(i, len(segments))
-        result += f"- {start}-{end}秒：{desc}，{camera_movement}\n"
-    
-    # 添加音效设计
-    result += "\n音效设计（AI 建议）：\n"
-    result += f"- 背景音乐：{get_music_style(scene_type)}\n"
-    result += f"- 音效：{get_sound_effects(scene_type)}\n"
-    
-    if references != "无":
-        result += f"\n参考素材：\n- {references}\n"
-    
-    return result
+【目标规格】
+时长：{duration}秒
+画幅：{ratio}
+视觉风格：{style}
+
+请必须严格按以下格式输出（直接输出文字，不要加Markdown代码块）：
+
+{duration}秒🎭 {scene_type}场景，🎬 {style}，{ratio}。
+
+时间轴（AI 增强）：
+- 0-5秒：[分镜1：角色外貌、动作、环境光影描述] + [具体运镜方式]
+- 5-10秒：[分镜2：神态变化、肢体动作描述] + [具体运镜方式]
+- 10-{duration}秒：[分镜3：情节高潮动作描述] + [具体运镜方式]
+
+音效设计（AI 建议）：
+- 背景音乐：[具体的乐器、节奏，例如：舒缓大提琴带有轻微混响]
+- 音效：[具体的环境摩擦音，例如：微风吹拂树叶声、衣物摩擦声]
+"""
+
+    try:
+        from openai import OpenAI
+        # 这里使用你在上面配置好的 client (需确保已全局初始化 client)
+        client = OpenAI(
+            api_key=st.secrets.get("DEEPSEEK_API_KEY", "sk-62a693ae5cb24574bd9df2a9bb53cd99"),
+            base_url="https://api.deepseek.com"
+        )
+
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": f"请结合以上要求，将这段内容改为完美的视频画面分镜：\n{prompt}"}
+            ],
+            temperature=0.7
+        )
+        return response.choices[0].message.content
+
+    except Exception as e:
+        return f"🚨 AI 生成遇到问题，提示：{str(e)}\n请检查 API Key 额度或网络状态。"
+
+# generate_standard_storyboard 函数已被新的 AI 增强代码替代
 
 def get_camera_movement(index, total):
     """根据位置返回运镜"""
