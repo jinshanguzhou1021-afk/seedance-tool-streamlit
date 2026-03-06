@@ -8,7 +8,7 @@
 # ================= API Key 配置 =================
 
 # DeepSeek API 配置（内置）
-DEEPSEEK_API_KEY = "sk-0e3867301f604aef8afd25c0ed35aa98"  # 用户提供的 API Key
+DEEPSEEK_API_KEY = "sk-2f2c80b0af064d2a8ef04990630c8d7d"  # 用户提供的 API Key
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 DEEPSEEK_MODEL = "deepseek-chat"
 
