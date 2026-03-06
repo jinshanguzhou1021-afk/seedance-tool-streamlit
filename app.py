@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-即梦提示词工具 - Streamlit Web 应用（AI 视觉导演版）
-集成分镜生成器 + 提示词生成器 + 高级构建器 + AI 视觉导演 + 智能模板库
-版本: 2.3.0
+即梦提示词工具 - Streamlit Web 应用（AI 全能导演工作站）
+集成分镜生成器 + 提示词生成器 + 高级构建器 + AI 视觉导演 + DeepSeek-V3/OpenAI API + 智能模板库
+版本: 3.0.0
 """
 
 import streamlit as st
@@ -12,10 +12,277 @@ import logging
 from datetime import datetime
 from pathlib import Path
 import time
+from openai import OpenAI
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# ================= v3.0.0 Director System Prompt (视听一致性引擎）===================
+
+DIRECTOR_SYSTEM_PROMPT = """你是一位顶级的电影导演、影视工业专家和 AI 视频专家。
+
+## 你的角色
+1. **视觉导演** - 负责镜头语言、运镜设计、光影构图
+2. **情感分析师** - 负责识别故事的情绪转折点和冲突爆发点
+3. **分镜编剧** - 负责将故事拆分为逻辑连贯的导演级分镜
+
+## 你的任务
+将用户的文字稿转化为具有**空间逻辑一致性**和**前后分镜连续**的 Seedance 2.0 专业分镜。
+
+## 三层导演逻辑
+
+### 第一层：全局逻辑层（一致性保证）
+在生成任何分镜之前，必须先提取并锁定以下全局设定：
+1. **核心角色设定**：
+   - 外貌特征（发型、发色、面部特征）
+   - 服装风格（颜色、材质、风格）
+   - 性格特点（冷酷、温柔、坚毅等）
+
+2. **环境设定**：
+   - 空间位置（室内/室外、具体地点）
+   - 时间（清晨、黄昏、夜晚、深夜）
+   - 天气（晴天、雨天、雪天、暴风雨）
+
+3. **光影基调**：
+   - 整体色调（冷/暖）
+   - 对比度（高/低）
+   - 光效风格（自然/戏剧）
+
+**重要性**：这些设定在所有分镜中必须保持一致，防止"角色变脸"或"环境跳戏"。
+
+### 第二层：导演编剧层（标准化剧本）
+根据故事的情绪逻辑，生成 3-5 个逻辑连贯的分镜。每个分镜必须包含以下 6 个标准化要素：
+
+1. **镜号 (Shot ID)**：明确序列顺序（如：Shot 01, Shot 02）
+2. **场景 (Setting)**：定义空间位置与时间（如：破旧小酒馆 - 深夜）
+3. **运镜 (Camera)**：专业摄影机语言（如：低角度推近特写、荷兰斜角、希区柯克变焦）
+4. **动态画面描述提示词 (Visual Prompt)**：核心输出，包含：
+   - 电影级画质标签（8K, 超高清）
+   - 主体描述（外貌 + 服装，必须一致）
+   - 表情微操（瞳孔微动、汗水滑落、肌肉颤抖等）
+   - 爆发性动作（慢动作爆发、碎屑飞溅、衣物撕裂、剧烈喘息等）
+   - 环境特效（水花溅射、烟雾扩散、光效闪烁）
+   - 运镜描述（推、拉、摇、移、跟、环绕、变焦等）
+5. **旁白 (VO)**：叙事台词或内心独白
+6. **音效 (SFX)**：环境音、动作音、情绪转场音（如：暴雨击打窗户声、沉重的拔刀声）
+
+### 第三层：Seedance 2.0 适配层
+将场景转化为高张力、细致表情和物理动态的动态描述，并添加 Seedance 2.0 参数。
+
+## 空间连续性要求
+- 必须保持同一场景内的方位逻辑一致
+- 如果 Shot 1 角色在左侧，Shot 2 的转场必须符合视觉逻辑
+- 角色的位置、朝向、动作必须连续，不能跳跃
+
+## 角色一致性要求
+- 在所有分镜提示词中，必须使用相同的外貌特征描述
+- 服装、发型、面部特征必须保持一致
+- 避免使用"然后"、"接着"等简单的过渡词
+- 使用具有画面感的连续性描述
+
+## Seedance 2.0 优化要求
+- **细致表情**：必须包含（如：瞳孔收缩、嘴角抽搐、泪水盈眶、咬紧牙关）
+- **高张力动作**：必须包含（如：肌肉发力、衣物随风摆动、物理碰撞效果）
+- **物理交互**：必须包含（如：水花溅射、烟雾扩散、粒子特效）
+
+## 张力强度调节
+根据用户的张力选择，调整描述的激烈程度：
+- 3 (温和)：平静、温和、低强度
+- 5 (中等)：明显起伏、中等强度
+- 7 (强烈)：紧张刺激、高强度
+- 9 (极致)：极端冲突、极高强度
+- 10 (史诗)：史诗级冲突、最高强度
+
+## 情绪滤镜应用
+根据用户选择的情绪滤镜，调整整体氛围：
+- 忧郁：冷色调，低饱和度，阴影沉重，氛围压抑
+- 惊悚：高对比度，强烈明暗，锐利线条，不安感
+- 热血：暖色调，高饱和度，红色为主，燃烧感
+- 赛博：霓虹色彩，冷蓝色调，光效绚烂，科技感
+- 国风：水墨色调，留白艺术，金色点缀，古雅感
+- 治愈：暖色调，柔和光线，高亮度，温馨感
+- 悬疑：低亮度，强烈对比，阴影深重，神秘感
+- 浪漫：粉色系，柔光效果，朦胧美感，氛围甜蜜
+
+## 输出格式（必须严格遵守）
+
+请以 JSON 格式输出，格式如下：
+
+```json
+{
+  "global_settings": {
+    "main_character": "角色外貌特征描述（简短）",
+    "environment": "环境设定（地点 + 时间 + 天气）",
+    "lighting_tone": "光影基调",
+    "visual_style": "视觉风格"
+  },
+  "segments": [
+    {
+      "shot_id": "Shot 01",
+      "setting": "场景（地点 + 时间）",
+      "camera": "运镜方式（专业摄影语言）",
+      "visual_prompt": "完整的 Seedance 2.0 提示词，包含：电影级画质 + 主体 + 表情微操 + 爆发动作 + 环境特效 + 运镜 + 参数",
+      "vo": "旁白或台词",
+      "sfx": "音效描述",
+      "emotion": "情绪类型",
+      "tension": "张力等级"
+    }
+  ],
+  "complete_prompt": "所有分镜的完整 Seedance 2.0 提示词（用于直接复制）",
+  "metadata": {
+    "total_shots": 3-5,
+    "avg_tension": "平均张力等级",
+    "dominant_emotion": "主导情绪"
+  }
+}
+```
+
+## 重要提醒
+1. **空间连续性**是第一优先级，确保角色和环境的逻辑连贯
+2. **角色一致性**是第二优先级，确保外貌描述完全一致
+3. **张力强度**根据用户选择动态调整
+4. **情绪滤镜**应用到所有分镜，保持氛围统一
+5. **输出格式**必须严格遵循 JSON 格式
+6. **6 要素**每个分镜必须包含：镜号、场景、运镜、动态画面描述提示词、旁白、音效
+
+现在，请根据用户输入的故事和参数，生成符合上述要求的导演级分镜。
+"""
+
+# ================= DeepSeek/OpenAI API 配置 =================
+
+# DeepSeek API 配置
+DEEPSEEK_API_KEY = "sk-6297255fd0f84e7cb39ad48de10bf14e"
+DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
+
+# OpenAI API 配置（用于 v3.0.0 AI 全能导演工作站）
+OPENAI_API_KEY = None  # 将从 st.secrets 中读取
+OPENAI_BASE_URL = "https://api.openai.com/v1"  # 默认值，可从 st.secrets 中读取
+
+# API 模式选择
+API_MODES = {
+    "DeepSeek-V3 (免费)": "deepseek",
+    "OpenAI GPT-4 (付费)": "openai"
+}
+
+# ================= v3.0.0 导演系统 Prompt（视听一致性引擎）===================
+
+DIRECTOR_SYSTEM_PROMPT = """你是一位顶级的电影导演、影视工业专家和 AI 视频专家。
+
+## 你的角色
+1. **视觉导演** - 负责镜头语言、运镜设计、光影构图
+2. **情感分析师** - 负责识别故事的情绪转折点和冲突爆发点
+3. **分镜编剧** - 负责将故事拆分为逻辑连贯的导演级分镜
+
+## 你的任务
+将用户的文字稿转化为具有**空间逻辑一致性**和**前后分镜连续**的 Seedance 2.0 专业分镜。
+
+## 三层导演逻辑
+
+### 第一层：全局逻辑层（一致性保证）
+在生成任何分镜之前，必须先提取并锁定：
+1. **核心角色设定**：外貌特征（发型、发色、面部特征）、服装风格、性格特点
+2. **环境设定**：空间位置（室内/室外、具体地点）、时间（清晨/黄昏/夜晚）、天气（晴天/雨天/雪天）
+3. **光影基调**：整体色调（冷/暖）、对比度（高/低）、光效风格（自然/戏剧）
+
+**重要性**：这些设定在所有分镜中必须保持一致，防止"角色变脸"或"环境跳戏"。
+
+### 第二层：导演编剧层（标准化剧本）
+根据故事的情绪逻辑，生成 3-5 个逻辑连贯的分镜。每个分镜必须包含：
+
+1. **镜号 (Shot ID)**：明确序列顺序（如：Shot 01, Shot 02）
+2. **场景 (Setting)**：定义空间位置与时间（如：破旧小酒馆 - 深夜）
+3. **运镜 (Camera)**：专业摄影机语言（如：低角度推近特写、荷兰斜角、希区柯克变焦）
+4. **动态画面描述提示词 (Visual Prompt)**：核心输出，包含：
+   - 电影级画质标签
+   - 主体描述（外貌 + 服装，必须一致）
+   - 表情微操（瞳孔微动、汗水滑落、肌肉颤抖等）
+   - 爆发性动作（慢动作爆发、碎屑飞溅、衣物撕裂、剧烈喘息等）
+   - 环境特效（水花溅射、烟雾扩散、光效闪烁）
+   - 运镜描述（推、拉、摇、移、跟、环绕、变焦等）
+5. **旁白 (VO)**：叙事台词或内心独白
+6. **音效 (SFX)**：环境音、动作音、情绪转场音
+
+### 第三层：Seedance 2.0 适配层
+将场景转化为高张力、细致表情和物理动态的动态描述，并添加参数。
+
+## 空间连续性要求
+- 必须保持同一场景内的方位逻辑一致
+- 如果 Shot 1 角色在左侧，Shot 2 的转场必须符合视觉逻辑
+- 角色的位置、朝向、动作必须连续，不能跳跃
+
+## 角色一致性要求
+- 在所有分镜提示词中，必须使用相同的外貌特征描述
+- 服装、发型、面部特征必须保持一致
+- 避免使用"然后"、"接着"等简单的过渡词
+- 使用具有画面感的连续性描述
+
+## Seedance 2.0 优化要求
+- **细致表情**：必须包含（如：瞳孔收缩、嘴角抽搐、泪水盈眶、咬紧牙关）
+- **高张力动作**：必须包含（如：肌肉发力、衣物随风摆动、物理碰撞效果）
+- **物理交互**：必须包含（如：水花溅射、烟雾扩散、粒子特效）
+
+## 张力强度调节
+根据用户的张力选择，调整描述的激烈程度：
+- 3 (温和)：平静、温和、低强度
+- 5 (中等)：明显起伏、中等强度
+- 7 (强烈)：紧张刺激、高强度
+- 9 (极致)：极端冲突、极高强度
+- 10 (史诗)：史诗级冲突、最高强度
+
+## 情绪滤镜应用
+根据用户选择的情绪滤镜，调整整体氛围：
+- 忧郁：冷色调、低饱和度、压抑氛围
+- 惊悚：高对比度、强烈明暗、不安感
+- 热血：暖色调、高饱和度、燃烧感
+- 赛博：霓虹色彩、冷蓝色调、科技感
+- 国风：水墨色调、留白艺术、古雅感
+- 治愈：暖色调、柔和光线、温馨感
+- 悬疑：低亮度、强烈对比、神秘感
+- 浪漫：粉色系、柔光效果、甜蜜氛围
+
+## 输出格式（必须严格遵守）
+
+请以 JSON 格式输出，格式如下：
+
+```json
+{
+  "global_settings": {
+    "main_character": "角色外貌特征描述（简短）",
+    "environment": "环境设定（地点 + 时间 + 天气）",
+    "lighting_tone": "光影基调",
+    "visual_style": "视觉风格"
+  },
+  "segments": [
+    {
+      "shot_id": "Shot 01",
+      "setting": "场景（地点 + 时间）",
+      "camera": "运镜方式（专业摄影语言）",
+      "visual_prompt": "完整的 Seedance 2.0 提示词，包含：电影级画质 + 主体 + 表情 + 动作 + 特效 + 运镜 + 参数",
+      "vo": "旁白或台词",
+      "sfx": "音效描述",
+      "emotion": "情绪类型",
+      "tension": "张力等级"
+    }
+  ],
+  "complete_prompt": "所有分镜的完整 Seedance 2.0 提示词（用于直接复制）",
+  "metadata": {
+    "total_shots": 3-5,
+    "avg_tension": "平均张力等级",
+    "dominant_emotion": "主导情绪"
+  }
+}
+```
+
+## 重要提醒
+1. **空间连续性**是第一优先级，确保角色和环境的逻辑连贯
+2. **角色一致性**是第二优先级，确保外貌描述完全一致
+3. **张力强度**根据用户选择动态调整
+4. **情绪滤镜**应用到所有分镜，保持氛围统一
+5. **输出格式**必须严格遵循 JSON 格式
+
+现在，请根据用户输入的故事和参数，生成符合上述要求的导演级分镜。
+"""
 
 # ================= Prompt Builder 词库定义 =================
 CAMERA_MOVES = {
@@ -117,7 +384,7 @@ DRAMATIC_LIGHTING = {
 
 # 页面配置
 st.set_page_config(
-    page_title="即梦提示词工具 v2.3.0",
+    page_title="即梦提示词工具 v2.4.0",
     page_icon="🎬",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -675,6 +942,12 @@ def render_ai_director():
 
     st.markdown("---")
 
+    # API 模式切换
+    api_mode = st.toggle("🤖 使用 DeepSeek-V3 API", value=False, help="开启后使用 DeepSeek-V3 API 进行智能生成，关闭后使用本地模拟")
+    st.caption("💡 DeepSeek-V3 API 会生成更高质量、更具文学性的分镜描述，但需要有效的 API Key")
+
+    st.markdown("---")
+
     # 第一部分：故事输入与情感分析
     col1, col2 = st.columns([2, 1])
 
@@ -755,67 +1028,113 @@ def render_ai_director():
             st.warning("⚠️ 请先输入故事或脚本！")
         else:
             with st.spinner("AI 视觉导演正在分析故事..."):
-                # 三层导演逻辑
-                dramatic_storyboard = generate_dramatic_storyboard(
-                    story_text,
-                    tension_level,
-                    emotion_filter,
-                    expression_select,
-                    action_select,
-                    camera_select,
-                    lighting_select,
-                    aspect_ratio
-                )
+                if api_mode:
+                    # 使用 DeepSeek-V3 API
+                    with st.spinner("正在调用 DeepSeek-V3 API 生成高质量分镜..."):
+                        result = call_deepseek_api(
+                            story_text,
+                            tension_level,
+                            emotion_filter,
+                            expression_select,
+                            action_select,
+                            camera_select,
+                            lighting_select
+                        )
 
-                # 显示结果
-                st.success("✅ 导演级分镜已生成！")
+                    if "error" in result:
+                        st.error(f"❌ {result['error']}")
+                    else:
+                        # 构建全局设定（用于 v3.0.0）
+                        global_settings = {
+                            "main_character": global_character if global_character else "根据故事提取",
+                            "environment": global_environment if global_environment else "根据故事提取",
+                            "lighting_tone": global_lighting if global_lighting else "自然光",
+                            "visual_style": global_style if global_style else "电影感"
+                        }
 
-                # 使用标签页展示不同分镜
-                tabs = st.tabs([f"分镜 {i+1}" for i in range(len(dramatic_storyboard['segments']))])
+                        # 显示 v3.0.0 结果（6 要素）
+                        display_v3_director_result(result, api_mode="DeepSeek-V3 (免费)", story_text=story_text, global_settings=global_settings, tension_level=tension_level, aspect_ratio=aspect_ratio)
+                else:
+                    # 使用本地模拟
+                    dramatic_storyboard = generate_dramatic_storyboard(
+                        story_text,
+                        tension_level,
+                        emotion_filter,
+                        expression_select,
+                        action_select,
+                        camera_select,
+                        lighting_select,
+                        aspect_ratio
+                    )
 
-                for i, tab in enumerate(tabs):
-                    with tab:
-                        st.markdown(f"### 🎬 分镜 {i+1}")
+                    # 构建全局设定（用于 v3.0.0）
+                    global_settings = {
+                        "main_character": "根据故事提取",
+                        "environment": "根据故事提取",
+                        "lighting_tone": "自然光",
+                        "visual_style": "电影感"
+                    }
 
-                        # 分镜信息卡片
-                        segment = dramatic_storyboard['segments'][i]
+                    # 显示 v3.0.0 结果（6要素）
+                    display_v3_director_result({
+                        "api_mode": "本地模拟",
+                        "model": "本地算法",
+                        "global_settings": global_settings,
+                        "segments": dramatic_storyboard["segments"],
+                        "complete_prompt": dramatic_storyboard["final_prompt"]
+                    }, "本地模拟", story_text, global_settings, tension_level, aspect_ratio)
 
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown(f"**时间：** {segment['time']}")
-                            st.markdown(f"**情节：** {segment['plot']}")
 
-                        with col2:
-                            st.markdown(f"**情绪：** {segment['emotion']}")
-                            st.markdown(f"**张力：** {segment['tension']}")
+def display_director_result(result, api_mode):
+    """显示导演级分镜结果（v2.4.0 版本，4要素）"""
 
-                        st.markdown("---")
-                        st.markdown(f"**📝 分镜描述：**")
-                        st.code(segment['description'], language="text")
+    if "error" in result:
+        st.error(f"❌ {result['error']}")
+    elif "segments" in result:
+        st.success("✅ v2.4.0 导演级分镜已生成！")
 
-                # 显示完整提示词
-                st.markdown("---")
-                st.markdown("### 🎯 完整 Seedance 2.0 提示词（复制到 Seedance 使用）")
-                st.code(dramatic_storyboard['final_prompt'], language="text")
+        # 使用标签页展示不同分镜
+        if result["segments"]:
+            tabs = st.tabs([f"分镜 {i+1}" for i in range(len(result["segments"]))])
 
-                # 下载按钮
-                download_content = f"""=== Seedance 2.0 导演级分镜 ===
+            for i, tab in enumerate(tabs):
+                with tab:
+                    st.markdown(f"### 🎬 分镜 {i+1}")
 
-{dramatic_storyboard['final_prompt']}
+                    # 分镜信息卡片
+                    segment = result["segments"][i]
+
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"**时间：** {segment['time']}")
+                        st.markdown(f"**情节：** {segment['plot']}")
+
+                    with col2:
+                        st.markdown(f"**情绪：** {segment['emotion']}")
+                        st.markdown(f"**张力：** {segment['tension']}")
+
+                    st.markdown("---")
+                    st.markdown(f"**📝 分镜描述：**")
+                    st.code(segment['description'], language="text")
+
+        # 显示完整提示词
+        st.markdown("---")
+        st.markdown("### 🎯 完整 Seedance 2.0 提示词（复制到 Seedance 使用）")
+        st.code(result["final_prompt"], language="text")
+
+        # 下载按钮
+        download_content = f"""=== Seedance 2.0 导演级分镜 ===
+
+{result['final_prompt']}
 
 === 导演信息 ===
-张力强度：{tension_level}
-情绪滤镜：{', '.join(emotion_filter) if emotion_filter else '无'}
-表情微操：{', '.join(expression_select) if expression_select else '无'}
-动作张力：{', '.join(action_select) if action_select else '无'}
-大师运镜：{', '.join(camera_select) if camera_select else '无'}
-戏剧光影：{', '.join(lighting_select) if lighting_select else '无'}
-画幅比例：{aspect_ratio}
-
-=== 分镜详情 ===
+使用模式：{'DeepSeek-V3 API' if api_mode and 'deepseek' in api_mode.lower() else '本地模拟'}
+故事：{result.get('story', '未知故事')}
+张力强度：{result.get('tension_level', '未知')}
 """
-                for i, seg in enumerate(dramatic_storyboard['segments']):
-                    download_content += f"""
+
+        for i, seg in enumerate(result["segments"]):
+            download_content += f"""
 分镜 {i+1}：
 时间：{seg['time']}
 情节：{seg['plot']}
@@ -825,21 +1144,312 @@ def render_ai_director():
 
 """
 
-                st.download_button(
-                    label="💾 下载导演级分镜配置",
-                    data=download_content,
-                    file_name=f"seedance_director_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
+        st.download_button(
+            label="💾 下载导演级分镜配置",
+            data=download_content,
+            file_name=f"seedance_director_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
 
-                # 保存到历史记录
-                save_to_history(
-                    "AI视觉导演",
-                    story_text,
-                    dramatic_storyboard['final_prompt'],
-                    len(dramatic_storyboard['segments']) > 0
-                )
+        # 保存到历史记录
+        save_to_history(
+            "AI视觉导演" if not api_mode else "AI视觉导演(DeepSeek)",
+            result.get("story", "未知故事"),
+            result["final_prompt"],
+            len(result["segments"]) > 0
+        )
+
+    else:
+        if "error" in result:
+            st.error(f"❌ {result['error']}")
+        else:
+            st.warning("⚠️ 未生成任何分镜，请检查输入或 API 配置")
+
+
+# ================= v3.0.0 Director 结果显示函数（6要素）===================
+
+def display_v3_director_result(result, api_mode, story_text, global_settings, tension_level, aspect_ratio):
+    """显示 v3.0.0 导演级分镜结果（6要素：镜号、场景、运镜、提示词、旁白、音效）"""
+
+    if "error" in result:
+        st.error(f"❌ {result['error']}")
+    elif "segments" in result and result["segments"]:
+        st.success("✅ v3.0.0 导演级分镜已生成！")
+
+        # 显示全局设定
+        st.markdown("### 🌐 全局设定（一致性保证）")
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("核心角色", result.get("global_settings", {}).get("main_character", "未指定"))
+        with col2:
+            st.metric("环境设定", result.get("global_settings", {}).get("environment", "未指定"))
+        with col3:
+            st.metric("光影基调", result.get("global_settings", {}).get("lighting_tone", "未指定"))
+        with col4:
+            st.metric("分镜数量", len(result["segments"]))
+
+        st.markdown("---")
+
+        # 显示分镜卡片
+        st.markdown("### 🎬 分镜剧本（6 要素标准化）")
+
+        for i, segment in enumerate(result["segments"]):
+            with st.expander(f"🎬 分镜 {i+1}: {segment.get('shot_id', 'Shot ' + str(i+1))}"):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.markdown(f"**⏱️ 时间/场景：** {segment.get('setting', '未指定')}")
+                    st.markdown(f"**🎥 运镜：** {segment.get('camera', '未指定')}")
+
+                with col2:
+                    st.markdown(f"**😐 情绪：** {segment.get('emotion', '未指定')}")
+                    st.markdown(f"**💪 张力：** {segment.get('tension', '未指定')}")
+
+                st.markdown("---")
+                st.markdown(f"**🎯 动态画面描述提示词：**")
+                st.code(segment.get('visual_prompt', '未指定'), language="text")
+
+                # 新增：旁白和音效
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.markdown("**🎤 旁白 (VO):**")
+                    vo = segment.get('vo', '无')
+                    if vo:
+                        st.success(f"\"{vo}\"")
+                    else:
+                        st.info("（无）")
+
+                with col2:
+                    st.markdown("**🔊 音效 (SFX):**")
+                    sfx = segment.get('sfx', '无')
+                    if sfx:
+                        st.success(f"\"{sfx}\"")
+                    else:
+                        st.info("（无）")
+
+        st.markdown("---")
+
+        # 显示完整提示词
+        st.markdown("### 🎯 完整 Seedance 2.0 提示词（复制到 Seedance 使用）")
+        st.code(result.get("complete_prompt", ""), language="text")
+
+        # 显示元数据
+        st.markdown("### 📊 元数据")
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric("API 模式", result.get("api_mode", "未知"))
+        with col2:
+            st.metric("模型", result.get("model", "未知"))
+        with col3:
+            st.metric("张力强度", tension_level)
+
+        # 下载按钮
+        download_content = f"""=== Seedance 2.0 v3.0.0 导演级分镜 ===
+
+{result.get("complete_prompt", "")}
+
+=== 元数据 ===
+API 模式：{result.get("api_mode", "未知")}
+模型：{result.get("model", "未知")}
+张力强度：{tension_level}
+画幅比例：{aspect_ratio}
+
+=== 全局设定 ===
+核心角色：{result.get("global_settings", {}).get("main_character", "未指定")}
+环境设定：{result.get("global_settings", {}).get("environment", "未指定")}
+光影基调：{result.get("global_settings", {}).get("lighting_tone", "未指定")}
+视觉风格：{result.get("global_settings", {}).get("visual_style", "未指定")}
+
+=== 分镜详情（6 要素）===
+"""
+
+        for i, seg in enumerate(result["segments"]):
+            download_content += f"""
+分镜 {i+1}：
+镜号：{seg.get('shot_id', 'Shot ' + str(i+1))}
+场景：{seg.get('setting', '未指定')}
+运镜：{seg.get('camera', '未指定')}
+动态画面描述提示词：{seg.get('visual_prompt', '未指定')}
+旁白：{seg.get('vo', '（无）')}
+音效：{seg.get('sfx', '（无）')}
+情绪：{seg.get('emotion', '未指定')}
+张力：{seg.get('tension', '未指定')}
+"""
+
+        st.download_button(
+            label="💾 下载 v3.0.0 导演级分镜配置",
+            data=download_content,
+            file_name=f"seedance_v3.0.0_director_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+
+        # 保存到历史记录
+        try:
+            save_to_history(
+                "AI全能导演v3.0.0" if api_mode else "AI全能导演v3.0.0(DeepSeek)",
+                story_text,
+                result.get("complete_prompt", ""),
+                len(result["segments"]) > 0
+            )
+        except NameError:
+            pass
+
+    else:
+        st.warning("⚠️ 未生成任何分镜，请检查输入或 API 配置")
+
+
+# ================= v3.0.0 Director API 调用函数（简化版）===================
+
+def call_openai_api_director_v3(story_text, api_mode, tension_level, emotion_filter, expression_select, action_select, camera_select, lighting_select, aspect_ratio):
+    """调用 OpenAI/DeepSeek API 生成 v3.0.0 导演级分镜（6要素）"""
+
+    # 转换为 DeepSeek/OpenAI 兼容的格式
+    if "deepseek" in api_mode.lower():
+        api_key = "sk-6297255fd0f84e7cb39ad48de10bf14e"
+        base_url = "https://api.deepseek.com/v1"
+        model_name = "deepseek-chat"
+    else:
+        api_key = OPENAI_API_KEY if OPENAI_API_KEY else "sk-6297255fd0f84e7cb39ad48de10bf14e"
+        base_url = OPENAI_BASE_URL if OPENAI_BASE_URL else "https://api.openai.com/v1"
+        model_name = "gpt-4-turbo"
+
+    try:
+        # 转换张力等级为数字
+        tension_map = {
+            "平淡叙事 (温和)": 3,
+            "轻微波动 (平静)": 5,
+            "明显起伏 (中等)": 7,
+            "紧张刺激 (强烈)": 9,
+            "史诗冲突 (极致)": 10
+        }
+        tension_val = tension_map.get(tension_level, 5)
+
+        # 转换画幅比例
+        ar_map = {
+            "16:9 横屏": "--ar 16:9",
+            "21:9 电影宽屏": "--ar 21:9",
+            "9:16 竖屏": "--ar 9:16",
+            "1:1 方图": "--ar 1:1"
+        }
+        ar_param = ar_map.get(aspect_ratio, "--ar 16:9")
+
+        # 构建 API 请求
+        messages = [
+            {
+                "role": "system",
+                "content": DIRECTOR_SYSTEM_PROMPT
+            },
+            {
+                "role": "user",
+                "content": f"""请为以下故事生成 3-5 个导演级分镜脚本（6要素标准化）：
+
+故事描述：{story_text}
+
+导演参数：
+- 张力强度：{tension_level} (数值: {tension_val})
+- 情绪滤镜：{', '.join(emotion_filter) if emotion_filter else '无'}
+- 表情微操：{', '.join(expression_select) if expression_select else '无'}
+- 动作张力：{', '.join(action_select) if action_select else '无'}
+- 大师运镜：{', '.join(camera_select) if camera_select else '无'}
+- 戏剧化光影：{', '.join(lighting_select) if lighting_select else '无'}
+
+要求：
+1. 根据故事的情绪转折点，生成 3-5 个逻辑连贯的分镜
+2. 每个分镜必须包含以下 6 个标准化要素：
+   - 镜号 (Shot ID)
+   - 场景 (Setting)
+   - 运镜 (Camera)
+   - 动态画面描述提示词 (Visual Prompt)
+   - 旁白 (VO)
+   - 音效 (SFX)
+3. 确保空间连续性和角色一致性
+4. 使用电影级、文学性的中文描述
+5. 极致张力和细腻表情
+
+请以 JSON 格式输出。
+"""
+            }
+        ]
+
+        # 调用 API
+        if "openai" in api_mode.lower() and OPENAI_API_KEY:
+            client = OpenAI(api_key=api_key, base_url=base_url)
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=0.7,
+                top_p=0.9,
+                max_tokens=3000
+            )
+            content = response.choices[0].message.content
+        else:
+            # 使用 requests 调用 DeepSeek
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            payload = {
+                "model": model_name,
+                "messages": messages,
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "max_tokens": 3000
+            }
+            api_response = requests.post(
+                f"{base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            api_response.raise_for_status()
+            result = api_response.json()
+            content = result["choices"][0]["message"]["content"]
+
+        # 尝试提取 JSON
+        try:
+            json_start = content.find("{")
+            json_end = content.rfind("}") + 1
+
+            if json_start != -1 and json_end > json_start:
+                json_str = content[json_start:json_end]
+                segments_data = json.loads(json_str)
+
+                return {
+                    "api_mode": api_mode,
+                    "model": model_name,
+                    "global_settings": segments_data.get("global_settings", {}),
+                    "segments": segments_data.get("segments", []),
+                    "complete_prompt": content
+                }
+
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.error(f"解析 API 响应失败：{e}")
+
+        # 如果 JSON 解析失败，返回原始内容
+        return {
+            "api_mode": api_mode,
+            "model": model_name,
+            "global_settings": {},
+            "segments": [],
+            "complete_prompt": content,
+            "raw_response": True
+        }
+
+    except Exception as e:
+        logger.error(f"API 调用失败：{e}")
+        return {
+            "error": f"API 调用失败：{str(e)}",
+            "api_mode": api_mode,
+            "segments": []
+        }
+
+
+# ================= v2.4.0 DeepSeek API 调用函数 =================
 
 
 # ================= AI 视觉导演核心逻辑 =================
@@ -1075,14 +1685,144 @@ def build_final_director_prompt(segments, motion_val, aspect_ratio):
     return final_prompt
 
 
+# ================= DeepSeek API 调用函数 =================
+
+def call_deepseek_api(story_text, tension_level, emotion_filter, expression_select, action_select, camera_select, lighting_select):
+    """调用 DeepSeek-V3 API 生成导演级分镜"""
+
+    # 构建 API 请求
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
+    }
+
+    # 构建用户提示词
+    user_prompt = f"""请为以下故事生成 3-5 个导演级分镜脚本：
+
+故事描述：{story_text}
+
+导演参数：
+- 张力强度：{tension_level}
+- 情绪滤镜：{', '.join(emotion_filter) if emotion_filter else '无'}
+- 表情微操：{', '.join(expression_select) if expression_select else '无'}
+- 动作张力：{', '.join(action_select) if action_select else '无'}
+- 大师运镜：{', '.join(camera_select) if camera_select else '无'}
+- 戏剧化光影：{', '.join(lighting_select) if lighting_select else '无'}
+
+要求：
+1. 根据故事的情绪转折点，生成 3-5 个逻辑连贯的分镜
+2. 每个分镜必须包含：
+   - 精确的时间范围（精确到秒）
+   - 情节类型（起、承/转、合、高潮）
+   - 情绪类型
+   - 张力程度
+   - 详细的文学性中文描述（包含细腻的表情、爆发性的动作、戏剧化的运镜和光影）
+3. 确保分镜之间逻辑连贯，情绪递进
+4. 使用电影级、文学性的语言
+5. 极致张力和细腻表情
+
+请以 JSON 格式输出：
+{{
+  "segments": [
+    {{
+      "time": "0-5秒",
+      "plot": "起",
+      "emotion": "恐惧",
+      "tension": "强烈",
+      "description": "详细的文学性分镜描述"
+    }}
+  ]
+}}
+"""
+
+    # 构建 API 请求体
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [
+            {
+                "role": "system",
+                "content": DEEPSEEK_SYSTEM_PROMPT
+            },
+            {
+                "role": "user",
+                "content": user_prompt
+            }
+        ],
+        "temperature": 0.7,  # 稍高的温度，增加创造性
+        "top_p": 0.9,
+        "max_tokens": 2000
+    }
+
+    try:
+        # 调用 DeepSeek API
+        response = requests.post(
+            DEEPSEEK_API_URL,
+            headers=headers,
+            json=payload,
+            timeout=30  # 30 秒超时
+        )
+
+        response.raise_for_status()
+
+        # 解析响应
+        result = response.json()
+
+        # 提取分镜信息
+        if "choices" in result and len(result["choices"]) > 0:
+            content = result["choices"][0]["message"]["content"]
+
+            # 尝试提取 JSON
+            try:
+                # 查找 JSON 格式的部分
+                json_start = content.find("{")
+                json_end = content.rfind("}") + 1
+
+                if json_start != -1 and json_end > json_start:
+                    json_str = content[json_start:json_end]
+                    segments_data = json.loads(json_str)
+
+                    if "segments" in segments_data:
+                        return {
+                            "segments": segments_data["segments"],
+                            "final_prompt": content
+                        }
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.error(f"解析 DeepSeek 响应失败：{e}")
+
+        # 如果 JSON 解析失败，返回原始内容
+        return {
+            "segments": [],
+            "final_prompt": content,
+            "raw_response": True
+        }
+
+    except requests.exceptions.Timeout:
+        return {
+            "error": "请求超时，请稍后重试",
+            "segments": []
+        }
+    except requests.exceptions.RequestException as e:
+        logger.error(f"DeepSeek API 请求失败：{e}")
+        return {
+            "error": f"API 请求失败：{str(e)}",
+            "segments": []
+        }
+    except Exception as e:
+        logger.error(f"DeepSeek API 调用失败：{e}")
+        return {
+            "error": f"未知错误：{str(e)}",
+            "segments": []
+        }
+
+
 # 主界面
 def main():
     # 加载历史记录
     load_history()
     
     # 标题
-    st.title("🎬 即梦提示词工具 v2.3.0")
-    st.markdown("集成 **分镜生成器** + **提示词生成器** + **高级构建器** + **AI 视觉导演** + **智能模板库**")
+    st.title("🎬 即梦提示词工具 v3.0.0")
+    st.markdown("集成 **分镜生成器** + **提示词生成器** + **高级构建器** + **AI 视觉导演 v3.0.0** + **OpenAI/DeepSeek API** + **视听一致性引擎** + **三层导演逻辑** + **6要素标准化剧本**")
     
     # AI 技能开关
     st.sidebar.markdown("### ⚙️ 设置")
@@ -1366,16 +2106,16 @@ def main():
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.metric("版本", "2.3.0")
+            st.metric("版本", "2.4.0")
             st.metric("发布日期", "2026-03-05")
 
         with col2:
             st.metric("开发者", "Seedance Tool Team")
-            st.metric("框架", "Streamlit 1.55.0")
+            st.metric("框架", "Streamlit 1.55.0 + DeepSeek-V3")
 
         with col3:
             st.metric("状态", "✅ 正常运行")
-            st.metric("新增", "AI 视觉导演")
+            st.metric("新增", "DeepSeek-V3 API")
 
         st.markdown("---")
 
@@ -1450,14 +2190,54 @@ def main():
 
         st.markdown("---")
 
+        st.subheader("🎬 DeepSeek-V3 集成")
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.markdown("""
+            ### 🎬 核心特性
+            - ✅ DeepSeek-V3 API 调用
+            - ✅ 智能故事分析
+            - ✅ 高质量分镜生成
+            - ✅ 全中文文学性描述
+            """)
+
+        with col2:
+            st.markdown("""
+            ### 🎬 双模式支持
+            - ✅ API 模式：使用 DeepSeek-V3
+            - ✅ 本地模式：使用模拟算法
+            - ✅ 一键切换
+            - ✅ 错误自动处理
+            """)
+
+        with col3:
+            st.markdown("""
+            ### 🎬 API 配置
+            - ✅ 已配置 API Key
+            - ✅ 支持自定义温度
+            - ✅ 支持超时重试
+            - ✅ 自动错误处理
+            """)
+
+        st.markdown("---")
+
         st.subheader("💡 AI 增强功能")
         st.markdown("""
-        开启 **🤖 使用 OpenClaw AI 技能** 后：
+        开启 **🤖 使用 OpenClaw AI 技能** 或 **🎬 使用 DeepSeek-V3 API** 后：
 
         - **场景智能理解** - 根据场景类型（动作、剧情、广告等）自动生成更具体的描述
         - **运镜智能匹配** - 自动匹配最合适的运镜方式
         - **音效智能设计** - 自动推荐背景音乐和音效
         - **专业级提示词** - 生成电影级别的视频描述
+
+        **v2.4.0 DeepSeek-V3 集成**：
+        - **DeepSeek-V3 API** - 使用 DeepSeek-V3 进行智能生成
+        - **高质量分镜** - API 生成更具文学性和电影感的分镜
+        - **智能故事分析** - 自动识别情绪转折点、冲突爆发点、情绪高潮点
+        - **三层导演逻辑** - 情感解析 + 戏剧化扩充 + Seedance 2.0 适配
+        - **双模式支持** - API 模式（高质量） + 本地模式（快速）
+        - **错误自动处理** - 超时重试、API 错误处理
 
         **v2.2.0 新增功能**：
         - **高级构建器** - 模块化构建专业级 Seedance 提示词

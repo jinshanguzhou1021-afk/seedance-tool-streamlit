@@ -10,6 +10,8 @@ ENV/
 
 # Streamlit
 .streamlit/secrets.toml
+.streamlit_deployed
+.streamlit_deployed_url
 
 # Git
 .git/
@@ -29,6 +31,11 @@ skills/
 # 临时文件
 *.md.bak
 *.py.bak
+*.backup*
+
+# 备份文件
+app.py.backup*
+*.backup*
 
 # 中文文件
 *.md.bak
